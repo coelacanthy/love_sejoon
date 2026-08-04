@@ -10,7 +10,23 @@ type Review = { grade: string; title: string; body: string; question: string };
 const icons: Record<string, string> = { wK:"♔",wQ:"♕",wR:"♖",wB:"♗",wN:"♘",wP:"♙",bK:"♚",bQ:"♛",bR:"♜",bB:"♝",bN:"♞",bP:"♟" };
 const values: Record<string, number> = { P:1,N:3,B:3,R:5,Q:9,K:0 };
 const files = ["a","b","c","d","e","f","g","h"];
-const thinkingSteps = ["체크할 수가 있나?", "잡을 수 있는 말이 있나?", "상대가 무엇을 노리나?", "후보 수 2개를 비교했나?"];
+const strategyPlans = [
+  [
+    {icon:"◎",title:"중앙을 차지해",detail:"e4·d4에 폰이나 기물의 영향력을 늘려봐."},
+    {icon:"♞",title:"새 말을 전개해",detail:"아직 움직이지 않은 나이트와 비숍을 먼저 꺼내."},
+    {icon:"♔",title:"왕을 안전하게",detail:"퀸보다 캐슬링 준비가 먼저야."},
+  ],
+  [
+    {icon:"＋",title:"강제 수부터",detail:"체크 → 잡기 → 위협 순서로 후보 수를 찾아봐."},
+    {icon:"◈",title:"가장 나쁜 말을 개선해",detail:"활동하지 못하는 내 기물을 더 좋은 칸으로 옮겨."},
+    {icon:"👁",title:"상대 계획을 막아",detail:"상대가 한 수 더 두면 무엇을 노리는지 먼저 봐."},
+  ],
+  [
+    {icon:"♙",title:"패스폰을 만들어",detail:"폰 교환 뒤 멈출 상대 폰이 없는지 계산해."},
+    {icon:"♔",title:"왕을 활동시켜",detail:"말이 줄었다면 왕도 강한 공격 기물이야."},
+    {icon:"⇄",title:"유리할 때 교환해",detail:"기물은 줄이고 중요한 폰은 남기는 계획을 생각해."},
+  ],
+];
 const openingGuide = [
   { name:"이탈리안 게임", moves:"1. e4 e5  2. Nf3 Nc6  3. Bc4", idea:"빠른 전개와 왕의 안전", plan:"나이트와 비숍을 전개하고 짧은 캐슬링을 준비해요.", why:"비숍이 흑의 약한 f7 칸을 바라보기 때문에 초반부터 주도권을 잡을 수 있어요.", trap:"퀸만 일찍 움직이면 상대가 퀸을 공격하며 공짜로 전개할 수 있어요." },
   { name:"시실리안 디펜스", moves:"1. e4 c5", idea:"비대칭 구조에서 반격", plan:"d4 칸을 압박하고 퀸사이드에서 공간을 넓혀요.", why:"흑은 e폰을 똑같이 막지 않고 c폰으로 중앙을 옆에서 공격해 승부를 복잡하게 만들어요.", trap:"전개 전에 폰만 많이 움직이면 왕이 중앙에 남아 공격받기 쉬워요." },
@@ -31,21 +47,21 @@ function newBoard(): Board { const b:Board=Array.from({length:8},()=>Array(8).fi
 function legalMoves(board:Board,r:number,c:number){ const p=board[r][c];if(!p)return [] as [number,number][];const out:[number,number][]=[];const add=(rr:number,cc:number)=>{if(rr>=0&&rr<8&&cc>=0&&cc<8&&board[rr][cc]?.color!==p.color)out.push([rr,cc]);};if(p.type==="P"){const d=p.color==="w"?-1:1,start=p.color==="w"?6:1;if(!board[r+d]?.[c]){add(r+d,c);if(r===start&&!board[r+d*2]?.[c])add(r+d*2,c);}[-1,1].forEach(x=>{if(board[r+d]?.[c+x]&&board[r+d][c+x]?.color!==p.color)add(r+d,c+x);});}else if(p.type==="N") [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([a,d])=>add(r+a,c+d));else if(p.type==="K")for(let a=-1;a<=1;a++)for(let d=-1;d<=1;d++)if(a||d)add(r+a,c+d);else{const dirs=p.type==="B"?[[1,1],[1,-1],[-1,1],[-1,-1]]:p.type==="R"?[[1,0],[-1,0],[0,1],[0,-1]]:[[1,1],[1,-1],[-1,1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];dirs.forEach(([a,d])=>{for(let n=1;n<8;n++){const rr=r+a*n,cc=c+d*n;if(rr<0||rr>7||cc<0||cc>7)break;if(board[rr][cc]){add(rr,cc);break;}add(rr,cc);}});}return out; }
 
 export default function Home(){
-  const [board,setBoard]=useState<Board>(newBoard); const [selected,setSelected]=useState<[number,number]|null>(null); const [turn,setTurn]=useState<Color>("w"); const [history,setHistory]=useState<string[]>([]); const [captured,setCaptured]=useState(0); const [hint,setHint]=useState("중앙의 e4 폰을 두 칸 전진해 보세요."); const [guide,setGuide]=useState(0); const [tech,setTech]=useState(0); const [deepMode,setDeepMode]=useState(true); const [checks,setChecks]=useState<boolean[]>([false,false,false,false]); const [review,setReview]=useState<Review|null>(null); const [quiz,setQuiz]=useState<string|null>(null);
-  const moves=useMemo(()=>selected?legalMoves(board,...selected):[],[board,selected]); const ready=checks.filter(Boolean).length>=3;
+  const [board,setBoard]=useState<Board>(newBoard); const [selected,setSelected]=useState<[number,number]|null>(null); const [turn,setTurn]=useState<Color>("w"); const [history,setHistory]=useState<string[]>([]); const [captured,setCaptured]=useState(0); const [hint,setHint]=useState("중앙의 e4 폰을 두 칸 전진해 보세요."); const [guide,setGuide]=useState(0); const [tech,setTech]=useState(0); const [review,setReview]=useState<Review|null>(null); const [quiz,setQuiz]=useState<string|null>(null);
+  const moves=useMemo(()=>selected?legalMoves(board,...selected):[],[board,selected]); const phase=history.length<10?0:history.length<24?1:2; const strategies=strategyPlans[phase];
   const moveText=(p:Piece,to:[number,number])=>`${p.type==="P"?"":p.type}${files[to[1]]}${8-to[0]}`;
-  const reset=()=>{setBoard(newBoard());setSelected(null);setTurn("w");setHistory([]);setCaptured(0);setChecks([false,false,false,false]);setReview(null);setHint("새 대국이에요. 중앙·전개·왕의 안전 순서로 계획해 봅시다.");};
+  const reset=()=>{setBoard(newBoard());setSelected(null);setTurn("w");setHistory([]);setCaptured(0);setReview(null);setHint("새 대국이에요. 중앙·전개·왕의 안전 순서로 계획해 봅시다.");};
   const makeReview=(p:Piece,from:[number,number],to:[number,number],target:Piece|null):Review=>{if(target&&values[target.type]>=values[p.type])return{grade:"훌륭해요",title:"가치 있는 기물을 잡았어요",body:`${values[p.type]}점 기물로 ${values[target.type]}점 기물을 잡아 물질적으로 이득입니다. 하지만 상대의 재포획도 확인하세요.`,question:"상대가 다음 수에 이 말을 다시 잡을 수 있을까?"};if((p.type==="N"||p.type==="B")&&from[0]===7&&history.length<8)return{grade:"좋은 수",title:"전개의 원칙을 지켰어요",body:"새 기물을 꺼내 중앙 통제와 캐슬링 준비를 동시에 개선했습니다.",question:"이 기물이 지금 지키는 중앙 칸은 어디일까?"};if(p.type==="Q"&&history.length<6)return{grade:"다시 생각",title:"퀸이 조금 일찍 나왔어요",body:"초반의 퀸은 상대의 작은 기물에게 공격받아 같은 말을 여러 번 움직이게 될 수 있습니다.",question:"퀸 대신 아직 움직이지 않은 나이트나 비숍을 전개할 수 있었을까?"};if((to[0]===3||to[0]===4)&&(to[1]===3||to[1]===4))return{grade:"좋은 수",title:"중앙 영향력이 커졌어요",body:"중앙의 말은 더 많은 칸을 통제하고 양쪽 날개로 빠르게 이동할 수 있습니다.",question:"상대가 이 중앙을 공격하면 어떤 말로 지킬까?"};return{grade:"계획 수",title:"조용한 수에도 목적이 필요해요",body:"기물을 안전하게 만들었는지, 활동성을 높였는지, 상대 위협을 막았는지 확인해 보세요.",question:"이 수로 좋아진 내 기물과 약해진 칸은 무엇일까?"};};
   const aiMove=(next:Board)=>{const all:{from:[number,number],to:[number,number],gain:number}[]=[];next.forEach((row,r)=>row.forEach((p,c)=>{if(p?.color==="b")legalMoves(next,r,c).forEach(to=>all.push({from:[r,c],to,gain:next[to[0]][to[1]]?values[next[to[0]][to[1]]!.type]:0}));}));if(!all.length)return;const best=Math.max(...all.map(x=>x.gain)),pool=all.filter(x=>x.gain===best),pick=pool[Math.floor(Math.random()*pool.length)],b=next.map(row=>row.slice()),p=b[pick.from[0]][pick.from[1]]!;b[pick.to[0]][pick.to[1]]=p;b[pick.from[0]][pick.from[1]]=null;setBoard(b);setHistory(h=>[...h,moveText(p,pick.to)]);setTurn("w");};
-  const click=(r:number,c:number)=>{if(turn!=="w")return;if(selected&&moves.some(([a,d])=>a===r&&d===c)){if(deepMode&&!ready){setHint("생각 루틴에서 최소 3가지를 확인한 뒤 수를 확정해 보세요.");return;}const b=board.map(row=>row.slice()),p=b[selected[0]][selected[1]]!,target=b[r][c];if(target)setCaptured(x=>x+values[target.type]);b[r][c]=p;b[selected[0]][selected[1]]=null;if(p.type==="P"&&r===0)b[r][c]={color:"w",type:"Q"};setReview(makeReview(p,selected,[r,c],target));setBoard(b);setHistory(h=>[...h,moveText(p,[r,c])]);setSelected(null);setTurn("b");setChecks([false,false,false,false]);setHint("내 수를 복기한 뒤, 상대의 가장 강한 응수를 예상해 보세요.");setTimeout(()=>aiMove(b),420);return;}if(board[r][c]?.color==="w")setSelected([r,c]);else setSelected(null);};
+  const click=(r:number,c:number)=>{if(turn!=="w")return;if(selected&&moves.some(([a,d])=>a===r&&d===c)){const b=board.map(row=>row.slice()),p=b[selected[0]][selected[1]]!,target=b[r][c];if(target)setCaptured(x=>x+values[target.type]);b[r][c]=p;b[selected[0]][selected[1]]=null;if(p.type==="P"&&r===0)b[r][c]={color:"w",type:"Q"};setReview(makeReview(p,selected,[r,c],target));setBoard(b);setHistory(h=>[...h,moveText(p,[r,c])]);setSelected(null);setTurn("b");setHint(target?"잘 잡았어요. 이제 상대가 되잡을 수 있는지 확인해 보세요.":"좋아요. 상대의 가장 강한 응수를 예상해 보세요.");setTimeout(()=>aiMove(b),420);return;}if(board[r][c]?.color==="w")setSelected([r,c]);else setSelected(null);};
   const g=openingGuide[guide],t=techniques[tech];
   return <main>
     <header><div className="brand"><span className="logo">♞</span><div><b>세준이의 체스 탐험</b><small>한 수 더 깊게 생각하는 체스</small></div></div><nav><a href="#game">실전 대국</a><a href="#academy">기법 학습관</a></nav><div className="profile"><span className="level">LEVEL 12</span><div className="avatar">백</div><div><b>백세준</b><small>주니어 나이트</small></div></div></header>
-    <section className="hero"><div><span className="eyebrow">♟ 오늘의 사고력 훈련</span><h1>좋은 수를 넘어,<br/><em>이유 있는 수를 두자!</em></h1><p>후보 수를 만들고 비교하며, 상대의 가장 강한 응수까지 생각해 보세요.</p></div><div className="streak"><span>🧠</span><b>깊이 생각 모드</b><small>결과보다 사고 과정을 훈련해요</small></div></section>
+    <section className="hero"><div><span className="eyebrow">♟ 오늘의 사고력 훈련</span><h1>좋은 수를 넘어,<br/><em>이유 있는 수를 두자!</em></h1><p>게임을 막지 않는 짧은 전략 안내로, 자연스럽게 한 수 더 깊이 생각해 보세요.</p></div><div className="streak"><span>🧠</span><b>전략 코치 ON</b><small>매 차례 핵심 전략을 바로 알려줘요</small></div></section>
     <section className="game-layout" id="game">
       <aside className="left-panel">
         <div className="card coach"><div className="coach-title"><span>🦉</span><div><b>코치 루크</b><small>생각 루틴</small></div></div><p>“보이는 첫 수보다, 비교한 두 번째 수가 더 강할 때가 많아!”</p></div>
-        <div className="card think-card"><div className="think-head"><div><span className="tag">착수 전 30초</span><h3>CCT+ 생각 루틴</h3></div><button className={deepMode?"switch on":"switch"} onClick={()=>setDeepMode(!deepMode)} aria-label="깊이 생각 모드 전환"><i/></button></div><p>최소 3개를 확인하면 수를 확정할 수 있어요.</p>{thinkingSteps.map((s,i)=><label key={s}><input type="checkbox" checked={checks[i]} onChange={()=>setChecks(x=>x.map((v,j)=>j===i?!v:v))}/><span>{i+1}</span>{s}</label>)}<div className="ready">{!deepMode?"자유 대국 모드":ready?"✓ 이제 후보 수를 결정하세요":"확인 중 · "+checks.filter(Boolean).length+"/3"}</div></div>
+        <div className="card think-card"><span className="tag">지금의 전략 · {phase===0?"오프닝":phase===1?"미들게임":"엔드게임"}</span><h3>이 세 가지만 떠올려!</h3><p>체크하지 않아도 괜찮아요. 수를 고를 때 자연스럽게 비교해 보세요.</p><div className="strategy-list">{strategies.map((s,i)=><button key={s.title} onClick={()=>setHint(s.detail)}><span>{s.icon}</span><div><b>{i+1}. {s.title}</b><small>{s.detail}</small></div></button>)}</div></div>
         <button className="hint-button" onClick={()=>setHint("후보 수 A와 B를 정한 뒤, 각각에 대한 상대의 가장 강한 응수를 한 수씩 계산해 보세요.")}>💡 단계별 힌트 보기</button>
       </aside>
       <div className="board-column">
